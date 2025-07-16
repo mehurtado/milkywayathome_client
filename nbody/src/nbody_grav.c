@@ -170,10 +170,13 @@ static inline void nbMapForceBody(const NBodyCtx* ctx, NBodyState* st)
         {
             case EXTERNAL_POTENTIAL_DEFAULT:
                 b = &bodies[i];
+                /*
                 a = nbGravity(ctx, st, b);
                 externAcc = mw_addv(nbExtAcceleration(&ctx->pot, Pos(b), barTime), plummerAccel(Pos(b), LMCx, lmcmass, lmcscale));
                 mw_incaddv(a, externAcc);
                 accels[i] = a;
+                */
+               accels[i] = bfe_grav(b);
                 break;
             case EXTERNAL_POTENTIAL_NONE:
                 accels[i] = nbGravity(ctx, st, &bodies[i]);
@@ -228,10 +231,13 @@ static inline void nbMapForceBody_Exact(const NBodyCtx* ctx, NBodyState* st)
         {
             case EXTERNAL_POTENTIAL_DEFAULT:
                 b = &bodies[i];
+                /*
                 a = nbGravity_Exact(ctx, st, b);
                 externAcc = mw_addv(nbExtAcceleration(&ctx->pot, Pos(b), barTime), plummerAccel(Pos(b), LMCx, lmcmass, lmcscale));
                 mw_incaddv(a, externAcc);
-                accels[i] = a;
+                accels[i] = a;\
+                */
+                accels[i] = bfe_grav(b);
                 break;
             case EXTERNAL_POTENTIAL_NONE:
                 accels[i] = nbGravity_Exact(ctx, st, &bodies[i]);
