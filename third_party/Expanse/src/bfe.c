@@ -1,13 +1,25 @@
-#include "bfe.h"
-#include <stdio.h>
+/* * ============================================================================
+ * BFE (Basis Function Expansion) Module Implementation
+ * ============================================================================
+ * Contains the function definitions for calculating gravitational potential
+ * and forces from a basis function expansion model.
+ */
+
+#include "bfe.h" // Public interface for this module
+#include <stdio.h> // <-- FIXED: Added for file I/O functions (fopen, stderr, etc.)
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "basis.h"
-#include "milkyway/milkyway_math.h"
 
-// --- Forward Declarations ---
-static inline int get_coeff_index(int n, int l, int m, int nmax, int lmax);
+// Assumes these project-specific headers are in the include path
+#include "milkyway/milkyway_math.h"
+#include "basis.h"
+
+// A small tolerance for floating-point comparisons.
+#define BFE_FLOAT_EPSILON 1e-12
+
+// --- Forward Declarations for Static Helper Functions ---
+static inline int get_coeff_index(int n, int l, int m, int lmax);
 static void bfe_compute_radial_basis(int n, int l, double s, double* phi_nl_out, double* dphi_nl_ds_out);
 static void bfe_sum_potential_and_derivatives(const BFEModel* model, double s,
                                               const double* Plm, const double* dPlm_dtheta,
@@ -18,8 +30,7 @@ static void bfe_convert_force_to_cartesian(double r, double cos_theta, double si
                                            double dPhi_dr, double dPhi_dtheta, double dPhi_dphi,
                                            double* force_out);
 
-// --- File I/O and Lifecycle Functions (Unchanged) ---
-// bfe_create_from_file, bfe_destroy, bfe_evolve_coeffs are identical to the previous version.
+// --- Public Function Definitions ---
 
 BFEModel* bfe_create_from_file(const char* filename) {
     FILE* file = fopen(filename, "r");
@@ -51,11 +62,11 @@ BFEModel* bfe_create_from_file(const char* filename) {
     int n, l, m;
     double s_val, t_val;
     char line_buffer[256];
-    fgets(line_buffer, sizeof(line_buffer), file);
+    fgets(line_buffer, sizeof(line_buffer), file); // Skip header line
     while (fgets(line_buffer, sizeof(line_buffer), file) != NULL) {
         if (line_buffer[0] == '#' || strlen(line_buffer) < 5) continue;
         if (sscanf(line_buffer, "%d %d %d %lf %lf", &n, &l, &m, &s_val, &t_val) == 5) {
-            int index = get_coeff_index(n, l, m, model->nmax, model->lmax);
+            int index = get_coeff_index(n, l, m, model->lmax);
             model->S_coeffs[index] = s_val;
             model->T_coeffs[index] = t_val;
         }
@@ -72,11 +83,10 @@ void bfe_destroy(BFEModel* model) {
 }
 
 void bfe_evolve_coeffs(BFEModel* model, const Particle particles[], int num_particles, double dt) {
+    // Stub function, no operation.
     (void)model; (void)particles; (void)num_particles; (void)dt;
     return;
 }
-
-// --- Core Physics Functions ---
 
 void bfe_calculate_potential_and_force(double pos[3], const BFEModel* model, double* potential_out, double* force_out) {
     *potential_out = 0.0;
@@ -86,24 +96,24 @@ void bfe_calculate_potential_and_force(double pos[3], const BFEModel* model, dou
     double r = mw_sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2]);
     if (r < 1e-9) return;
 
-    double phi = mw_atan2(pos[1], pos[0]);
+    double phi_angle = mw_atan2(pos[1], pos[0]);
     double cos_theta = pos[2] / r;
     if (cos_theta > 1.0) cos_theta = 1.0;
     if (cos_theta < -1.0) cos_theta = -1.0;
     double s = r / model->scale_radius;
 
     int lmax = model->lmax;
-    double* cos_m_phi = malloc((lmax + 1) * sizeof(double));
-    double* sin_m_phi = malloc((lmax + 1) * sizeof(double));
+    double* cos_m_phi = (double*)malloc((lmax + 1) * sizeof(double));
+    double* sin_m_phi = (double*)malloc((lmax + 1) * sizeof(double));
     int legendre_size = (lmax + 1) * (lmax + 2) / 2;
-    double* Plm = malloc(legendre_size * sizeof(double));
-    double* dPlm_dtheta = malloc(legendre_size * sizeof(double));
+    double* Plm = (double*)malloc(legendre_size * sizeof(double));
+    double* dPlm_dtheta = (double*)malloc(legendre_size * sizeof(double));
     if (!cos_m_phi || !sin_m_phi || !Plm || !dPlm_dtheta) {
         free(cos_m_phi); free(sin_m_phi); free(Plm); free(dPlm_dtheta);
         return;
     }
 
-    basis_sincos(lmax, phi, cos_m_phi, sin_m_phi);
+    basis_sincos(lmax, phi_angle, cos_m_phi, sin_m_phi);
     basis_legendre_deriv(lmax, cos_theta, Plm, dPlm_dtheta);
 
     double Phi = 0.0, dPhi_ds = 0.0, dPhi_dtheta = 0.0, dPhi_dphi = 0.0;
@@ -112,8 +122,8 @@ void bfe_calculate_potential_and_force(double pos[3], const BFEModel* model, dou
     
     free(cos_m_phi); free(sin_m_phi); free(Plm); free(dPlm_dtheta);
 
-    const double G_CONST = 4.30091e-6;
-    const double GALAXY_MASS = 1.0e11;
+    const double G_CONST = 4.30091e-6; // (km/s)^2 * kpc / M_sun
+    const double GALAXY_MASS = 1.0e11; // M_sun
     const double POTENTIAL_SCALE = G_CONST * GALAXY_MASS;
 
     *potential_out = Phi * POTENTIAL_SCALE;
@@ -124,20 +134,17 @@ void bfe_calculate_potential_and_force(double pos[3], const BFEModel* model, dou
     dPhi_dphi   *= POTENTIAL_SCALE;
 
     double sin_theta = mw_sqrt(1.0 - cos_theta*cos_theta);
-    bfe_convert_force_to_cartesian(r, cos_theta, sin_theta, pos[0]/r*sin_theta, pos[1]/r*sin_theta,
+    double cos_phi = (r * sin_theta > 1e-9) ? pos[0] / (r * sin_theta) : 1.0;
+    double sin_phi = (r * sin_theta > 1e-9) ? pos[1] / (r * sin_theta) : 0.0;
+    bfe_convert_force_to_cartesian(r, cos_theta, sin_theta, cos_phi, sin_phi,
                                    dPhi_dr, dPhi_dtheta, dPhi_dphi, force_out);
 }
 
-// Wrapper function for backward compatibility
-void bfe_calculate_force(double pos[3], const BFEModel* model, double* force_out, 
-                         double* cos_m_phi, double* sin_m_phi, double* Plm, double* dPlm_dtheta) {
-    double potential; // Dummy variable
-    bfe_calculate_potential_and_force(pos, model, &potential, force_out);
-}
 
 // --- Static Helper Function Implementations ---
 
-static inline int get_coeff_index(int n, int l, int m, int nmax, int lmax) {
+// FIXED: Removed unused 'nmax' parameter
+static inline int get_coeff_index(int n, int l, int m, int lmax) {
     return n * (lmax + 1) * (lmax + 1) + l * (lmax + 1) + m;
 }
 
@@ -163,31 +170,29 @@ static void bfe_compute_radial_basis(int n, int l, double s, double* phi_nl_out,
 }
 
 static void bfe_sum_potential_and_derivatives(const BFEModel* model, double s,
-                                          const double* Plm, const double* dPlm_dtheta,
-                                          const double* cos_m_phi, const double* sin_m_phi,
-                                          double* Phi, double* dPhi_ds, double* dPhi_dtheta, double* dPhi_dphi) {
+                                        const double* Plm, const double* dPlm_dtheta,
+                                        const double* cos_m_phi, const double* sin_m_phi,
+                                        double* Phi, double* dPhi_ds, double* dPhi_dtheta, double* dPhi_dphi) {
     int nmax = model->nmax;
     int lmax = model->lmax;
-
     for (int n = 0; n <= nmax; ++n) {
         for (int l = 0; l <= lmax; ++l) {
             double phi_nl, dphi_nl_ds;
             bfe_compute_radial_basis(n, l, s, &phi_nl, &dphi_nl_ds);
-
             for (int m = 0; m <= l; ++m) {
-                int coeff_idx = get_coeff_index(n, l, m, nmax, lmax);
+                int coeff_idx = get_coeff_index(n, l, m, lmax);
                 double S_nlm = model->S_coeffs[coeff_idx];
                 double T_nlm = model->T_coeffs[coeff_idx];
 
-                if (S_nlm == 0 && T_nlm == 0) continue;
-
+                // FIXED: Use an epsilon for safer floating-point comparison
+                if (fabs(S_nlm) < BFE_FLOAT_EPSILON && fabs(T_nlm) < BFE_FLOAT_EPSILON) continue;
+                
                 int legendre_idx = l * (l + 1) / 2 + m;
                 double ST_term = S_nlm * cos_m_phi[m] + T_nlm * sin_m_phi[m];
-
-                *Phi         += phi_nl * Plm[legendre_idx] * ST_term;
-                *dPhi_ds     += dphi_nl_ds * Plm[legendre_idx] * ST_term;
-                *dPhi_dtheta += phi_nl * dPlm_dtheta[legendre_idx] * ST_term;
-                *dPhi_dphi   += phi_nl * Plm[legendre_idx] * m * (-S_nlm * sin_m_phi[m] + T_nlm * cos_m_phi[m]);
+                *Phi        += phi_nl * Plm[legendre_idx] * ST_term;
+                *dPhi_ds    += dphi_nl_ds * Plm[legendre_idx] * ST_term;
+                *dPhi_dtheta+= phi_nl * dPlm_dtheta[legendre_idx] * ST_term;
+                *dPhi_dphi  += phi_nl * Plm[legendre_idx] * m * (-S_nlm * sin_m_phi[m] + T_nlm * cos_m_phi[m]);
             }
         }
     }
