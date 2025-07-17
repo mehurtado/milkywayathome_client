@@ -130,7 +130,7 @@ Ntime_steps           = 3000        -- -- number of timesteps to run            
 use_max_soft_par      = false       -- -- limit the softening parameter value to a max value                               -- --
 max_soft_par          = 0.8         -- -- kpc, if switch above is turned on, use this as the max softening parameter       -- --
 
-generateInitialOutput = false       -- -- save initial dwarf galaxy state to initial.out before evolution                   -- --
+generateInitialOutput = true       -- -- save initial dwarf galaxy state to initial.out before evolution                   -- --
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
         
 -- -- -- -- -- -- -- -- -- DWARF STARTING LOCATION   -- -- -- -- -- -- -- --

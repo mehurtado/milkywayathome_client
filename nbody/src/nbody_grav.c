@@ -15,7 +15,9 @@
 #include "nbody_util.h"
 #include "nbody_grav.h"
 #include "milkyway_util.h"
-#include "../../third_party/Expanse/src/bfe.h" // <-- INCLUDE THE NEW BFE HEADER
+
+#include "../../third_party/Expanse/src/bfe.h" 
+#include "string.h"
 
 #ifdef _OPENMP
   #include <omp.h>
@@ -30,12 +32,12 @@ static BFEModel* g_bfe_model = NULL;
  * @brief Initializes the BFE model from a file. Call this during simulation setup.
  * @param filename Path to the BFE coefficient file.
  */
-void nbGravInitBFE(const char* filename) {
-    if (g_bfe_model) {
+void nbGravInitBFE(const char* filename, BFEModel* bfe_model) {
+    if (bfe_model) {
         bfe_destroy(g_bfe_model);
     }
-    g_bfe_model = bfe_create_from_file(filename);
-    if (!g_bfe_model) {
+    bfe_model = bfe_create_from_file(filename);
+    if (!bfe_model) {
         mw_fail("Failed to initialize BFE model from file: %s\n", filename);
     }
 }
@@ -43,10 +45,10 @@ void nbGravInitBFE(const char* filename) {
 /**
  * @brief Cleans up and frees the BFE model. Call this during simulation teardown.
  */
-void nbGravCleanupBFE(void) {
-    if (g_bfe_model) {
-        bfe_destroy(g_bfe_model);
-        g_bfe_model = NULL;
+void nbGravCleanupBFE(BFEModel* bfe_model) {
+    if (bfe_model) {
+        bfe_destroy(bfe_model);
+        bfe_model = NULL;
     }
 }
 
@@ -119,7 +121,7 @@ static mwvector nbGravity_Exact(const NBodyCtx* ctx, NBodyState* st, const Body*
     return a;
 }
 
-static mwvector bfe_grav(Body* b) {
+static mwvector bfe_grav(Body* b, BFEModel* bfe_model) {
     double bfe_pos[3];
     double bfe_force[3];
     double bfe_potential; // required by function, but not used here
@@ -131,7 +133,7 @@ static mwvector bfe_grav(Body* b) {
     bfe_pos[2] = p_vec.z;
 
     // Call the external function, using the global BFE model pointer.
-    bfe_calculate_potential_and_force(bfe_pos, g_bfe_model, &bfe_potential, bfe_force);
+    bfe_calculate_potential_and_force(bfe_pos, bfe_model, &bfe_potential, bfe_force);
     
     SET_VECTOR(total_acc, bfe_force[0], bfe_force[1], bfe_force[2]);
     return total_acc;
@@ -161,6 +163,10 @@ static inline void nbMapForceBody(const NBodyCtx* ctx, NBodyState* st)
         lmcscale = 1.0;
     }
 
+    const char file[] = "../../build/bin/initial.out";
+    BFEModel* bfe_model = NULL;
+    nbGravInitBFE(file, bfe_model);
+
   #ifdef _OPENMP
     #pragma omp parallel for private(i, b, a, externAcc) shared(bodies, accels) schedule(dynamic, 4096 / sizeof(accels[0]))
   #endif
@@ -176,7 +182,7 @@ static inline void nbMapForceBody(const NBodyCtx* ctx, NBodyState* st)
                 mw_incaddv(a, externAcc);
                 accels[i] = a;
                 */
-               accels[i] = bfe_grav(b);
+               accels[i] = bfe_grav(b, bfe_model);
                 break;
             case EXTERNAL_POTENTIAL_NONE:
                 accels[i] = nbGravity(ctx, st, &bodies[i]);
@@ -190,12 +196,14 @@ static inline void nbMapForceBody(const NBodyCtx* ctx, NBodyState* st)
                 break;
             case EXTERNAL_POTENTIAL_BFE:
                 b = &bodies[i];
-                accels[i] = bfe_grav(b);
+                accels[i] = bfe_grav(b, bfe_model);
                 break;
             default:
                 mw_fail("Bad external potential type: %d\n", ctx->potentialType);
         }
     }
+
+    nbGravCleanupBFE(bfe_model);
 }
 
 
@@ -221,6 +229,10 @@ static inline void nbMapForceBody_Exact(const NBodyCtx* ctx, NBodyState* st)
         lmcmass = 0.0;
         lmcscale = 1.0;
     }
+    
+    const char file[] = "../../build/bin/initial.out";
+    BFEModel* bfe_model = NULL;
+    nbGravInitBFE(file, bfe_model);
 
   #ifdef _OPENMP
     #pragma omp parallel for private(i, b, a, externAcc) shared(bodies, accels) schedule(dynamic, 4096 / sizeof(accels[0]))
@@ -237,7 +249,7 @@ static inline void nbMapForceBody_Exact(const NBodyCtx* ctx, NBodyState* st)
                 mw_incaddv(a, externAcc);
                 accels[i] = a;\
                 */
-                accels[i] = bfe_grav(b);
+                accels[i] = bfe_grav(b, bfe_model);
                 break;
             case EXTERNAL_POTENTIAL_NONE:
                 accels[i] = nbGravity_Exact(ctx, st, &bodies[i]);
@@ -251,12 +263,14 @@ static inline void nbMapForceBody_Exact(const NBodyCtx* ctx, NBodyState* st)
                 break;
             case EXTERNAL_POTENTIAL_BFE:
                 b = &bodies[i];
-                accels[i] = bfe_grav(b);
+                accels[i] = bfe_grav(b, bfe_model);
                 break;
             default:
                 mw_fail("Bad external potential type: %d\n", ctx->potentialType);
         }
     }
+
+    nbGravCleanupBFE(bfe_model);
 }
 
 static inline NBodyStatus nbIncestStatusCheck(const NBodyCtx* ctx, const NBodyState* st)
