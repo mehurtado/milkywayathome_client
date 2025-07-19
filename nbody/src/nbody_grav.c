@@ -19,14 +19,14 @@
 #include "../../third_party/Expanse/src/bfe.h" 
 #include "string.h"
 
+#define EXTERNAL_POTENTIAL_BFE 3
+
+// Global BFE model necessary
+BFEModel* bfe_model;
+
 #ifdef _OPENMP
   #include <omp.h>
 #endif /* _OPENMP */
-
-#define EXTERNAL_POTENTIAL_BFE 3
-
-// Global pointer to the BFE model, managed by the functions below.
-static BFEModel* g_bfe_model = NULL;
 
 /**
  * @brief Initializes the BFE model from a file. Call this during simulation setup.
@@ -34,7 +34,7 @@ static BFEModel* g_bfe_model = NULL;
  */
 void nbGravInitBFE(const char* filename, BFEModel* bfe_model) {
     if (bfe_model) {
-        bfe_destroy(g_bfe_model);
+        bfe_destroy(bfe_model);
     }
     bfe_model = bfe_create_from_file(filename);
     if (!bfe_model) {
@@ -176,13 +176,10 @@ static inline void nbMapForceBody(const NBodyCtx* ctx, NBodyState* st)
         {
             case EXTERNAL_POTENTIAL_DEFAULT:
                 b = &bodies[i];
-                /*
                 a = nbGravity(ctx, st, b);
                 externAcc = mw_addv(nbExtAcceleration(&ctx->pot, Pos(b), barTime), plummerAccel(Pos(b), LMCx, lmcmass, lmcscale));
                 mw_incaddv(a, externAcc);
                 accels[i] = a;
-                */
-               accels[i] = bfe_grav(b, bfe_model);
                 break;
             case EXTERNAL_POTENTIAL_NONE:
                 accels[i] = nbGravity(ctx, st, &bodies[i]);
@@ -243,13 +240,10 @@ static inline void nbMapForceBody_Exact(const NBodyCtx* ctx, NBodyState* st)
         {
             case EXTERNAL_POTENTIAL_DEFAULT:
                 b = &bodies[i];
-                /*
                 a = nbGravity_Exact(ctx, st, b);
                 externAcc = mw_addv(nbExtAcceleration(&ctx->pot, Pos(b), barTime), plummerAccel(Pos(b), LMCx, lmcmass, lmcscale));
                 mw_incaddv(a, externAcc);
-                accels[i] = a;\
-                */
-                accels[i] = bfe_grav(b, bfe_model);
+                accels[i] = a;
                 break;
             case EXTERNAL_POTENTIAL_NONE:
                 accels[i] = nbGravity_Exact(ctx, st, &bodies[i]);
@@ -284,7 +278,7 @@ static inline NBodyStatus nbIncestStatusCheck(const NBodyCtx* ctx, const NBodySt
 NBodyStatus nbGravMap(const NBodyCtx* ctx, NBodyState* st)
 {
     if (ctx->potentialType == EXTERNAL_POTENTIAL_BFE) {
-        if (!g_bfe_model) {
+        if (!bfe_model) {
             mw_fail("BFE potential selected, but model is not initialized. Call nbGravInitBFE() first.\n");
         }
         // The 'Exact' mapping function is fine to use here, as it's just a loop.

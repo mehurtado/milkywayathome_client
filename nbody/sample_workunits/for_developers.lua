@@ -36,7 +36,8 @@ totalLightBodies      = 20000   -- -- NUMBER OF LIGHT MATTER BODIES             
 nbodyLikelihoodMethod = "EMD"   -- -- HIST COMPARE METHOD                                                      -- --
 nbodyMinVersion       = "1.93"  -- -- MINIMUM APP VERSION                                                      -- --
 
-run_null_potential    = false   -- -- NULL POTENTIAL SWITCH                                                    -- --
+-- run_null_potential    = false   -- -- NULL POTENTIAL SWITCH    
+potential_mode        = "bfe"   -- -- "standard", "null", "bfe"                                            -- --
 use_tree_code         = true    -- -- USE TREE CODE NOT EXACT                                                  -- --
 print_reverse_orbit   = false   -- -- PRINT REVERSE ORBIT SWITCH (WORKS FOR LMC_body = false)                  -- --
 print_out_parameters  = false   -- -- PRINT OUT ALL PARAMETERS                                                 -- --
@@ -146,7 +147,8 @@ preset_orbit_parameter_vz = 147.4
         
 -- -- -- -- -- -- -- -- -- CHECK TIMESTEPS -- -- -- -- -- -- -- -- 
 TooManyTimesteps = 0
-        
+    
+--[[
 function makePotential()
    if(run_null_potential == true) then
        print("running in null potential")
@@ -159,6 +161,31 @@ function makePotential()
             disk2     = Disk.none{ mass = 3.0e5 },
             halo      = Halo.logarithmic{ vhalo = 74.61, scaleLength = 12.0, flattenZ = 1.0 }
         }--vhalo = 74.61 kpc/gy = 73 km/s
+   end
+end
+--]]
+function makePotential()
+   if(potential_mode == "null") then
+       print("running in null potential")
+       return nil
+   elseif(potential_mode == "standard") then
+        --NOTE: To exclude a component from the potential, set component to "<component_name>.none" and include only an arbitrary "mass" argument
+        return  Potential.create{
+            spherical = Spherical.hernquist{ mass  = 1.52954402e5, scale = 0.7 },
+            disk      = Disk.miyamotoNagai{ mass = 4.45865888e5, scaleLength = 6.5, scaleHeight = 0.26 },
+            disk2     = Disk.none{ mass = 3.0e5 },
+            halo      = Halo.logarithmic{ vhalo = 74.61, scaleLength = 12.0, flattenZ = 1.0 }
+        }--vhalo = 74.61 kpc/gy = 73 km/s
+    elseif(potential_mode == "bfe") then
+        return  Potential.create{
+            spherical = Spherical.none{ mass = 1.0 },
+            disk      = Disk.none{ mass = 1.0 },
+            disk2     = Disk.none{ mass = 1.0 },
+            halo      = Halo.none{ mass = 1.0 }
+        }
+    else
+        print("No potential given, defaulting to null potential.")
+        return nil
    end
 end
 
