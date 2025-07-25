@@ -1,8 +1,7 @@
 /*
   Copyright (c) 1993, 2001 Joshua E. Barnes, Honolulu, HI.
-  Copyright 2010 Matthew Arsenault, Travis Desell, Boleslaw
+                        \
 Szymanski, Heidi Newberg, Carlos Varela, Malik Magdon-Ismail and
-Rensselaer Polytechnic Institute.
 
 Copyright (c) 2016-2018 Siddhartha Shelton
 
@@ -73,6 +72,7 @@ along with Milkyway@Home.  If not, see <http://www.gnu.org/licenses/>.
 #include "milkyway_util.h"
 #include "nbody_graphics.h"
 #include "nbody_potential_types.h"
+#include "../third_party/Expanse/src/bfe.h"
 
 #include <lua.h>
 #include <time.h>
@@ -170,7 +170,8 @@ typedef enum
 {
     EXTERNAL_POTENTIAL_DEFAULT,
     EXTERNAL_POTENTIAL_NONE,
-    EXTERNAL_POTENTIAL_CUSTOM_LUA
+    EXTERNAL_POTENTIAL_CUSTOM_LUA,
+    EXTERNAL_POTENTIAL_BFE
 } ExternalPotentialType;
 
 
@@ -515,6 +516,14 @@ typedef struct MW_ALIGN_TYPE
     time_t checkpointT;        /* Period to checkpoint when not using BOINC */
     unsigned int nStep;
 
+    /* BFE potential parameters */
+    double* S_nlm;
+    double* T_nlm;
+    int nmax;
+    int lmax;
+    char* coeffs_file_path;
+    BFEModel* bfeModel;
+
     Potential pot;
 
 
@@ -533,8 +542,9 @@ typedef struct MW_ALIGN_TYPE
                          0, 0, FALSE, 0,                                                                \
                          0,                                                                             \
                          0, 0, 0,                                                                       \
+                         NULL, NULL, 0, 0, NULL, NULL,
+                        \
                          EMPTY_POTENTIAL}
-
 /* Negative codes can be nonfatal but useful return statuses.
    Positive can be different hard failures.
  */
@@ -639,5 +649,3 @@ int equalNBodyCtx(const NBodyCtx* ctx1, const NBodyCtx* ctx2);
 
 int equalHistogramParams(const HistogramParams* hp1, const HistogramParams* hp2);
 
-
-#endif /* _NBODY_TYPES_H_ */

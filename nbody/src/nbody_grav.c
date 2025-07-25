@@ -21,9 +21,6 @@
 
 #define EXTERNAL_POTENTIAL_BFE 3
 
-// Global BFE model necessary
-BFEModel* bfe_model;
-
 #ifdef _OPENMP
   #include <omp.h>
 #endif /* _OPENMP */
@@ -32,23 +29,25 @@ BFEModel* bfe_model;
  * @brief Initializes the BFE model from a file. Call this during simulation setup.
  * @param filename Path to the BFE coefficient file.
  */
-void nbGravInitBFE(const char* filename, BFEModel* bfe_model) {
-    if (bfe_model) {
-        bfe_destroy(bfe_model);
+void nbGravInitBFE(NBodyCtx* ctx) {
+    if (ctx->bfeModel) {
+        bfe_destroy(ctx->bfeModel);
     }
-    bfe_model = bfe_create_from_file(filename);
-    if (!bfe_model) {
-        mw_fail("Failed to initialize BFE model from file: %s\n", filename);
+    if (!ctx->coeffs_file_path)
+        return;
+    ctx->bfeModel = bfe_create_from_file(ctx->coeffs_file_path);
+    if (!ctx->bfeModel) {
+        mw_fail("Failed to initialize BFE model from file: %s\n", ctx->coeffs_file_path);
     }
 }
 
 /**
  * @brief Cleans up and frees the BFE model. Call this during simulation teardown.
  */
-void nbGravCleanupBFE(BFEModel* bfe_model) {
-    if (bfe_model) {
-        bfe_destroy(bfe_model);
-        bfe_model = NULL;
+void nbGravCleanupBFE(NBodyCtx* ctx) {
+    if (ctx->bfeModel) {
+        bfe_destroy(ctx->bfeModel);
+        ctx->bfeModel = NULL;
     }
 }
 
@@ -163,9 +162,8 @@ static inline void nbMapForceBody(const NBodyCtx* ctx, NBodyState* st)
         lmcscale = 1.0;
     }
 
-    const char file[] = "../../build/bin/initial.out";
-    BFEModel* bfe_model = NULL;
-    nbGravInitBFE(file, bfe_model);
+    if (ctx->potentialType == EXTERNAL_POTENTIAL_BFE && !((NBodyCtx*)ctx)->bfeModel)
+        nbGravInitBFE((NBodyCtx*)ctx);
 
   #ifdef _OPENMP
     #pragma omp parallel for private(i, b, a, externAcc) shared(bodies, accels) schedule(dynamic, 4096 / sizeof(accels[0]))
@@ -193,14 +191,15 @@ static inline void nbMapForceBody(const NBodyCtx* ctx, NBodyState* st)
                 break;
             case EXTERNAL_POTENTIAL_BFE:
                 b = &bodies[i];
-                accels[i] = bfe_grav(b, bfe_model);
+                accels[i] = bfe_grav(b, ctx->bfeModel);
                 break;
             default:
                 mw_fail("Bad external potential type: %d\n", ctx->potentialType);
         }
     }
 
-    nbGravCleanupBFE(bfe_model);
+    if (ctx->potentialType == EXTERNAL_POTENTIAL_BFE)
+        nbGravCleanupBFE((NBodyCtx*)ctx);
 }
 
 
@@ -227,9 +226,8 @@ static inline void nbMapForceBody_Exact(const NBodyCtx* ctx, NBodyState* st)
         lmcscale = 1.0;
     }
     
-    const char file[] = "../../build/bin/initial.out";
-    BFEModel* bfe_model = NULL;
-    nbGravInitBFE(file, bfe_model);
+    if (ctx->potentialType == EXTERNAL_POTENTIAL_BFE && !((NBodyCtx*)ctx)->bfeModel)
+        nbGravInitBFE((NBodyCtx*)ctx);
 
   #ifdef _OPENMP
     #pragma omp parallel for private(i, b, a, externAcc) shared(bodies, accels) schedule(dynamic, 4096 / sizeof(accels[0]))
@@ -257,14 +255,15 @@ static inline void nbMapForceBody_Exact(const NBodyCtx* ctx, NBodyState* st)
                 break;
             case EXTERNAL_POTENTIAL_BFE:
                 b = &bodies[i];
-                accels[i] = bfe_grav(b, bfe_model);
+                accels[i] = bfe_grav(b, ctx->bfeModel);
                 break;
             default:
                 mw_fail("Bad external potential type: %d\n", ctx->potentialType);
         }
     }
 
-    nbGravCleanupBFE(bfe_model);
+    if (ctx->potentialType == EXTERNAL_POTENTIAL_BFE)
+        nbGravCleanupBFE((NBodyCtx*)ctx);
 }
 
 static inline NBodyStatus nbIncestStatusCheck(const NBodyCtx* ctx, const NBodyState* st)
@@ -278,7 +277,7 @@ static inline NBodyStatus nbIncestStatusCheck(const NBodyCtx* ctx, const NBodySt
 NBodyStatus nbGravMap(const NBodyCtx* ctx, NBodyState* st)
 {
     if (ctx->potentialType == EXTERNAL_POTENTIAL_BFE) {
-        if (!bfe_model) {
+        if (!ctx->bfeModel) {
             mw_fail("BFE potential selected, but model is not initialized. Call nbGravInitBFE() first.\n");
         }
         // The 'Exact' mapping function is fine to use here, as it's just a loop.
