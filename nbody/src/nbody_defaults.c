@@ -89,6 +89,13 @@ const NBodyCtx defaultNBodyCtx =
 
     /* .calibrationRuns */   0,
 
+    /* .S_nlm           */  NULL,
+    /* .T_nlm           */  NULL,
+    /* .nmax            */  0,
+    /* .lmax            */  0,
+    /* .coeffs_file_path*/  NULL,
+    /* .bfeModel        */  NULL,
+
     /* .pot             */  EMPTY_POTENTIAL
 };
 

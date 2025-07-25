@@ -28,6 +28,7 @@ extern "C" {
 #endif
 
 int nbGetPotentialTyped(lua_State* luaSt, NBodyCtx* ctx, int idx, const char* errMsg);
+int nbParseBFEParams(lua_State* luaSt, NBodyCtx* ctx, int idx, const char* errMsg);
 
 #ifdef __cplusplus
 }

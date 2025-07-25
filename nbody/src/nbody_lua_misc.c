@@ -23,6 +23,32 @@
 #include "milkyway_lua.h"
 #include "nbody_lua_util.h"
 #include "nbody_check_params.h"
+#include "../../third_party/Expanse/src/bfe.h"
+
+int nbParseBFEParams(lua_State* luaSt, NBodyCtx* ctx, int idx, const char* errMsg)
+{
+    const char* path = NULL;
+    lua_getfield(luaSt, idx, "coeffs_file");
+    if (!lua_isstring(luaSt, -1)) {
+        if (errMsg) mw_lua_perror(luaSt, "%s", errMsg);
+        lua_pop(luaSt, 1);
+        return 0;
+    }
+    path = lua_tostring(luaSt, -1);
+    ctx->coeffs_file_path = strdup(path);
+    lua_pop(luaSt, 1);
+    lua_getfield(luaSt, idx, "nmax");
+    ctx->nmax = luaL_optinteger(luaSt, -1, 0);
+    lua_pop(luaSt, 1);
+    lua_getfield(luaSt, idx, "lmax");
+    ctx->lmax = luaL_optinteger(luaSt, -1, 0);
+    lua_pop(luaSt, 1);
+    ctx->bfeModel = bfe_create_from_file(path);
+    if (!ctx->bfeModel) return 0;
+    ctx->S_nlm = ctx->bfeModel->S_coeffs;
+    ctx->T_nlm = ctx->bfeModel->T_coeffs;
+    return 1;
+}
 
 
 /* Try to read item at idx as one of the accepted potential types into ctx. */
@@ -41,6 +67,20 @@ int nbGetPotentialTyped(lua_State* luaSt, NBodyCtx* ctx, int idx, const char* er
         ctx->potentialType = EXTERNAL_POTENTIAL_CUSTOM_LUA;
         return 0;
     }
+    else if (lua_istable(luaSt, idx))
+    {
+        lua_getfield(luaSt, idx, "type");
+        const char* potential_type = lua_tostring(luaSt, -1);
+        lua_pop(luaSt, 1);
+        if (potential_type && strcmp(potential_type, "bfe") == 0)
+        {
+            if (!nbParseBFEParams(luaSt, ctx, idx, errMsg))
+                return 1;
+            ctx->potentialType = EXTERNAL_POTENTIAL_BFE;
+            return 0;
+        }
+    }
+
     else /* The default kind of potential */
     {
         Potential* tmp;

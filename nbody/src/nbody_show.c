@@ -238,6 +238,8 @@ const char* showExternalPotentialType(ExternalPotentialType x)
             return "None";
         case EXTERNAL_POTENTIAL_CUSTOM_LUA:
             return "Lua";
+        case EXTERNAL_POTENTIAL_BFE:
+            return "BFE";
         default:
             return "Unknown ExternalPotentialType";
     }
